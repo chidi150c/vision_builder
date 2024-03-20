@@ -1,137 +1,109 @@
 package main
 
 import (
-	"bytes"
-	"context"
-	"fmt"
-	"io"
+	"ai_agents/vision_builder/builder"
+	"ai_agents/vision_builder/model"
+	"bufio"
 	"log"
-	"regexp"
-	"time"
 
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/network"
-	"github.com/docker/docker/client"
+	// "ai_agents/vision_builder/env"
+	"flag"
+	"fmt"
+	"os"
+	"strings"
 )
-
-type DockerClient struct {
-	Cli      *client.Client
-	Address  string
-	Ctx      context.Context
-	Reader   io.ReadCloser
-	Response container.CreateResponse
-}
-
-func (dc *DockerClient) Close() {
-	dc.Reader.Close()
-}
-
-func NewVisionBuilderEnv(imageName string, containerName string, portMapping string) (*DockerClient, error) {
-	cli, err := client.NewClientWithOpts(client.FromEnv)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Docker client: %v", err)
-	}
-
-	existingContainer, err := cli.ContainerInspect(context.Background(), containerName)
-	if err == nil {
-		if existingContainer.State.Running {
-			if err := cli.ContainerStop(context.Background(), containerName, container.StopOptions{}); err != nil {
-				return nil, fmt.Errorf("failed to stop existing container: %v", err)
-			}
-		}
-		if err := cli.ContainerRemove(context.Background(), containerName, types.ContainerRemoveOptions{}); err != nil {
-			return nil, fmt.Errorf("failed to remove existing container: %v", err)
-		}
-	} else if !client.IsErrNotFound(err) {
-		return nil, fmt.Errorf("error inspecting existing container: %v", err)
-	}
-
-	ctx := context.Background()
-	reader, err := cli.ImagePull(ctx, imageName, types.ImagePullOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to pull Docker image: %v", err)
-	}
-	time.Sleep(2 * time.Second)
-
-	resp, err := cli.ContainerCreate(ctx, &container.Config{
-		Image: imageName,
-		Tty:   true,
-	}, &container.HostConfig{}, &network.NetworkingConfig{}, nil, containerName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create container: %v", err)
-	}
-
-	if err := cli.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
-		return nil, fmt.Errorf("failed to start container: %v", err)
-	}
-
-	time.Sleep(2 * time.Second)
-
-	inspect, err := cli.ContainerInspect(ctx, resp.ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to inspect container: %v", err)
-	}
-	ipAddress := inspect.NetworkSettings.IPAddress
-
-	dc := &DockerClient{
-		Reader:   reader,
-		Ctx:      ctx,
-		Cli:      cli,
-		Response: resp,
-		Address:  fmt.Sprintf("%s:%s", ipAddress, portMapping),
-	}
-	fmt.Println(dc.Address)
-	return dc, nil
-}
-
-func (dc *DockerClient) ExecuteCode(code string) (string, error) {
-    execConfig := types.ExecConfig{
-        Cmd:          []string{"sh", "-c", code},
-        AttachStdout: true,
-        AttachStderr: true,
-    }
-    execResp, err := dc.Cli.ContainerExecCreate(dc.Ctx, dc.Response.ID, execConfig)
-    if err != nil {
-        return "", fmt.Errorf("failed to create exec instance: %v", err)
+func validateVisionStatement(visionStatement *string) error {
+    if *visionStatement == "" {
+        // Prompt the user to enter the vision statement
+        reader := bufio.NewReader(os.Stdin)
+        fmt.Print("Enter the vision statement: ")
+        statement, err := reader.ReadString('\n')
+        if err != nil {
+            return fmt.Errorf("error reading input: %v", err)
+        }
+        *visionStatement = strings.TrimSpace(statement)
     }
 
-    execAttachResp, err := dc.Cli.ContainerExecAttach(dc.Ctx, execResp.ID, types.ExecStartCheck{})
-    if err != nil {
-        return "", fmt.Errorf("failed to attach to exec instance: %v", err)
-    }
-    defer execAttachResp.Close()
-
-    outputBuffer := new(bytes.Buffer)
-    _, err = io.Copy(outputBuffer, execAttachResp.Reader)
-    if err != nil {
-        return "", fmt.Errorf("failed to read exec output: %v", err)
+    // Validate input
+    if *visionStatement == "" {
+        return fmt.Errorf("vision statement is required")
     }
 
-    // Use a regular expression to remove non-printable characters
-    cleanOutput := regexp.MustCompile(`[\x00-\x1F\x7F-\x9F]`).ReplaceAllString(outputBuffer.String(), "")
-    return cleanOutput, nil
+    return nil
 }
-
-
 func main() {
-	imageName := "golang"
-	containerName := "my-go-app"
-	portMapping := "7681:7681"
+	vis := "To build a user-friendly platform that seamlessly connects pet owners with trustworthy pet sitters, enhancing the overall pet care experience."
+	visionStatement := flag.String("vision", vis, "The vision statement to fulfill")
+    flag.Parse()
 
-	dc, err := NewVisionBuilderEnv(imageName, containerName, portMapping)
+    // Call the function to validate the vision statement
+    if err := validateVisionStatement(visionStatement); err != nil {
+        fmt.Println("Error:", err)
+        os.Exit(1)
+    }
+
+	// // Initialize the DockerClient system
+	// dc, err := env.NewDockerClient(*visionStatement)
+	// if err != nil{
+	// 	log.Fatalln(err)
+	// }
+	// defer dc.Close()
+	// Parse the vision statement and extract tasks/sub-goals
+
+	vision := model.NewVision()
+
+	// vision.Description = "To revolutionize the fitness industry by empowering users to achieve their fitness goals through personalized workout plans on a mobile application."
+	vision.Description = *visionStatement
+
+
+	pj := builder.NewVisionBuilder(vision.Description)
+
+	// Define the initial vision
+	fmt.Print("\nEnter your vision statement and press ENTER: \n")
+	
+	reader := bufio.NewReader(os.Stdin)
+
+	inputCode, err := reader.ReadString('\n')
 	if err != nil {
-		log.Fatalf("Failed to create VisionBuilder environment: %v", err)
+		log.Fatal(err)
 	}
-	defer dc.Close()
-
-	// Example code to execute
-	code := "echo 'Hello from the container!'"
-
-	output, err := dc.ExecuteCode(code)
-	if err != nil {
-		log.Fatalf("Error executing code: %v", err)
+	inputCode = strings.TrimSpace(inputCode)
+	if inputCode != "" {
+		vision.Description = inputCode
 	}
 
-	fmt.Printf("Execution output: %s\n", output)
+	// Iteratively refine goals and tasks based on new insights or changes
+	var (
+		goals []model.Goal
+		// err error
+	)
+	//uncheck
+	_ = goals
+	fmt.Printf("\nBase Vision: %s\n", vision.Description)
+	// fmt.Printf("\nActiculated Vision: %s\n\n", vacticulated)
+	for {
+		pj.VisionEnhancement(vision)
+		
+	}
+
+	// // Execute tasks to fulfill the vision statement
+	// for _, task := range tasks {
+	// 	// Execute the task
+	// 	messages, _, done, info := dc.Rollout(task /* Pass context if needed */, true)
+
+	// 	// Print messages and track progress
+	// 	fmt.Println(messages)
+	// 	if done {
+	// 		// Handle completion
+	// 		fmt.Println("Task completed:", task)
+	// 	} else {
+	// 		// Handle ongoing task
+	// 		fmt.Println("Task in progress:", task)
+	// 	}
+	// }
+
+	// // Generate output
+	// // Include any relevant information about task completion, errors, etc.
 }
+
+
