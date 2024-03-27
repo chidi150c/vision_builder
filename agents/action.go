@@ -15,27 +15,28 @@ import (
 )
 
 type ActionAgent struct {
+	AbsolutePath string
 	CkptDir        string
 	ChatLog        bool
 	ExecutionError bool
-	AppMemory    map[string]interface{}
+	AppMemory      map[string]interface{}
 	Llm            AIModelServicer
 }
 
-func NewActionAgent(AIModel AIModelServicer,ckptDir string, resume bool, chatLog bool, executionError bool) *ActionAgent {
+func NewActionAgent(AIModel AIModelServicer, ckptDir string, resume bool, chatLog bool, executionError bool) *ActionAgent {
 	agent := &ActionAgent{
 		CkptDir:        ckptDir,
 		ChatLog:        chatLog,
 		ExecutionError: executionError,
-		AppMemory:    make(map[string]interface{}),
-		Llm: AIModel,
+		AppMemory:      make(map[string]interface{}),
+		Llm:            AIModel,
 	}
-		
+
 	// Create a new scanner to read input
 	scanner := bufio.NewScanner(os.Stdin)
 
 	// Ask the user for the directory name
-	fmt.Printf("Enter a directory name where the app would be set up (defualt: \"%s\"): ", ckptDir)
+	fmt.Printf("\nEnter a directory name for this developemnt: ")
 	// Read the input from the user
 	if scanner.Scan() {
 		// Get the directory name entered by the user
@@ -51,40 +52,41 @@ func NewActionAgent(AIModel AIModelServicer,ckptDir string, resume bool, chatLog
 			fmt.Printf("Error creating directory: %v\n", err)
 			log.Fatalln(err)
 		}
-		fmt.Println("Directory created successfully")
+		fmt.Println("\nDirectory created successfully")
 	} else {
 		fmt.Println("Failed to read input.")
 	}
 	// Specify the path to the JSON file
 	filePath := fmt.Sprintf("%s/action/app_memory.json", ckptDir)
-
-	// Read the JSON file
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		log.Fatalf("Error reading JSON file: %v", err)
-	}
-
-	// Initialize a variable to store the decoded JSON data
-	var appMemory map[string]interface{}
-
-	// Unmarshal the JSON data into the appMemory variable
-	err = json.Unmarshal(data, &appMemory)
-	if err != nil {
-		log.Fatalf("Error unmarshalling JSON data: %v", err)
-	}
-
-	// Access the loaded JSON data
-	// For example:
-	fmt.Println("Loaded app memory:")
-	for position, app := range appMemory {
-		if appMap, ok := app.(map[string]interface{}); ok{
-			fmt.Printf("Position: %s, App: %+v\n", position, appMap)
-			if resume {
+	var data []byte
+	var err error
+	if resume{
+		// Read the JSON file
+		data, err = os.ReadFile(filePath)
+		if err != nil {
+			log.Fatalf("VisionBuilder: %v", err)
+		}
+		// Initialize a variable to store the decoded JSON data
+		var appMemory map[string]interface{}
+	
+		// Unmarshal the JSON data into the appMemory variable
+		err = json.Unmarshal(data, &appMemory)
+		if err != nil {
+			log.Fatalf("Error unmarshalling JSON data: %v", err)
+		}
+		// Access the loaded JSON data
+		// For example:
+		fmt.Println("Loaded app memory:")
+		for position, app := range appMemory {
+			if appMap, ok := app.(map[string]interface{}); ok {
+				fmt.Printf("Position: %s, App: %+v\n", position, appMap)
 				fmt.Printf("\033[32mLoading Action Agent from %s/action\033[0m\n", ckptDir)
 				// appMemory := utils.LoadJSON(fmt.Sprintf("%s/action/app_memory.json", ckptDir))
 				agent.AppMemory[position] = appMap
 			}
 		}
+	}else {
+		agent.AppMemory = make(map[string]interface{})
 	}
 	return agent
 }
@@ -148,34 +150,30 @@ func (agent *ActionAgent) RenderAppObservation() string {
 	}
 	return "Apps: None\n\n"
 }
-type SystemTemplate struct{
-	Programs string
+
+type SystemTemplate struct {
+	Programs       string
 	ResponseFormat string
 }
+
 func (agent *ActionAgent) RenderSystemMessage(tasks []string) string {
 	baseTasks := []string{
-		"exploreUntil",
-		"mineBlock",
-		"craftItem",
-		"placeItem",
-		"smeltItem",
-		"killMob",
+		"baseCode",
 	}
 
 	programs := strings.Join(agent.LoadControlPrimitivesContext(baseTasks), "\n") + "\n" + strings.Join(tasks, "\n")
-	responseFormat, err := prompts.LoadPrompt("action_response_format")
+	responseFormat, err := prompts.LoadPrompt(agent.AbsolutePath, "action_response_format")
 	if err != nil {
 		log.Fatalf("Error: %v\n", err)
 	}
 	sm := SystemTemplate{
-		Programs: programs,
+		Programs:       programs,
 		ResponseFormat: responseFormat,
 	}
-	systemMessagePrompt, err := prompts.TemplateExecute("action_template", sm)
+	systemMessagePrompt, err := prompts.TemplateExecute(agent.AbsolutePath, "action_template", sm)
 	if err != nil {
 		log.Fatalf("Error: %v\n", err)
 	}
-
 	return systemMessagePrompt
 }
 
@@ -261,7 +259,6 @@ func (agent *ActionAgent) ProcessAIMessage(message Message) (string, error) {
 	return code, fmt.Errorf(errorStr)
 }
 
-
 func (agent *ActionAgent) SummarizeChatlog(events []interface{}) string {
 	filterItem := func(message string) string {
 		craftPattern := regexp.MustCompile(`I cannot make \w+ because I need: (.*)`)
@@ -301,7 +298,7 @@ func (agent *ActionAgent) SummarizeChatlog(events []interface{}) string {
 	return ""
 }
 
-func (agent *ActionAgent) LoadControlPrimitivesContext(primitiveNames []string)[]string {
+func (agent *ActionAgent) LoadControlPrimitivesContext(primitiveNames []string) []string {
 	// Usage example
 	// primitiveNames Pass primitive names if available, otherwise it will be auto-detected
 	primitives, err := loadControlPrimitivesContext(primitiveNames, agent.CkptDir)

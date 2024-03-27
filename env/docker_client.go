@@ -18,11 +18,14 @@ import (
 
 
 type DockerClient struct {
+    Mode         string
+    WaitTicks    string
 	Cli      *client.Client
 	Address  string
 	Ctx      context.Context
 	Reader   io.ReadCloser
 	Response container.CreateResponse
+	Output string
 }
 
 
@@ -145,5 +148,13 @@ func NewDockerClient(vision string)(*DockerClient, error){
 	}
 
 	fmt.Printf("Vision output: %s\n", output)
+	dc.Output = output              
 	return dc, nil
+}
+
+func (dc *DockerClient) Reset(m map[string]interface{})string{
+
+	dc.Mode = m["mode"].(string)
+	dc.WaitTicks = m["wait_ticks"].(string)
+	return ""
 }

@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"text/template"
 )
-func TemplateExecute(prompt string, data interface{})(string, error){
-	templateContent, err := LoadPrompt(prompt)
+func TemplateExecute(dPath string, promptFileName string, data interface{})(string, error){
+	templateContent, err := LoadPrompt(dPath, promptFileName)
 	if err != nil{
 		return "" ,  errors.New(fmt.Sprintln("Error Loading the template:", err))
 	}
@@ -28,15 +28,12 @@ func TemplateExecute(prompt string, data interface{})(string, error){
 	// Get the template output as a string
 	return buf.String(), nil
 }
-func LoadPrompt(prompt string) (string, error) {
-	// Assuming voyager is the package name and the prompts directory is in the same directory as the Go file
-	packagePath := "vision_builder" // Update this path if necessary
-
+func LoadPrompt(dpath, promptName string) (string, error) {
+	
 	// Get the absolute path to the prompts directory
-	promptsDir := filepath.Join(packagePath, "prompts")
-
+	promptsDir := filepath.Join(dpath, "prompts")
 	// Construct the absolute path to the prompt file
-	promptFilePath := filepath.Join(promptsDir, prompt+".txt")
+	promptFilePath := filepath.Join(promptsDir, promptName+".txt")
 
 	// Read the content of the prompt file
 	content, err := os.ReadFile(promptFilePath)

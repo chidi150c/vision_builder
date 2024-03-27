@@ -2,6 +2,7 @@ package builder
 
 import (
 	"ai_agents/vision_builder/model"
+	"errors"
 	"fmt"
 	"log"
 	"regexp"
@@ -244,40 +245,10 @@ loop:
 // 	}
 // }
 // func (pj *VisionBuilder) AutomaticRun(vision *model.Vision) {
-// 	pj.Output.Code = `
-// 	package main
-
-// import (
-// 	"fyne.io/fyne/v2/app"
-// 	"fyne.io/fyne/v2/container"
-// 	"fyne.io/fyne/v2/widget"
-// )
-
-// func main() {
-// 	myApp := app.New()
-// 	myWindow := myApp.NewWindow("Simple Code Editor")
-
-// 	// Create a multi-line text input
-// 	codeInput := widget.NewMultiLineEntry()
-// 	codeInput.SetPlaceHolder("Start typing your code...")
-
-// 	// You can set up a menu and other features here
-
-// 	// Add the text input to the window
-// 	myWindow.SetContent(container.NewVBox(
-// 		codeInput,
-// 		// Add other widgets as needed
-// 	))
-
-// 	myWindow.ShowAndRun()
-// }
-
-// 	`
 
 // 	r := 1
 // 	t := 1
 // 	y := 1
-// 	pj.Vision = fmt.Sprintf("Vision: %s\n", vision.Description)  
 // 	for {
 // 		for _, goal := range vision.Goals {
 // 			pj.Goal = fmt.Sprintf("Goal %d: %s\n", r, goal.Description)
@@ -292,7 +263,7 @@ loop:
 // 				// pj.Output.ExecOutput = fmt.Sprintf("\nExec Output: %s\n", pj.Executor(pj.Output.Code))
 // 				y = 1
 // 				for _, sub := range task.SubTask {		
-// 					pj.CodeSummarizer()			
+// 					// pj.CodeSummarizer()			
 // 					pj.SubTask = fmt.Sprintf("\n  Sub-Tasks %d: %s\n", y, sub)
 // 					input := fmt.Sprintf("\n%s\n%s\n%s\n%s\nCode: %s\n%s\n", pj.Vision,pj.Goal,pj.Task, pj.SubTask, pj.Output.Code, pj.Output.ExecOutput)
 // 					fmt.Printf("\n::::::::::::New SubTask Input From AutomaticRun2::::::::::\n %s",input)								
@@ -305,6 +276,7 @@ loop:
 // 		}
 // 	}
 // }
+
 // func (pj *VisionBuilder) AutoDeveloper(VisionGoal, goal string) CodeResponse {
 // 	chp := make(chan bool)
 // 	go pj.InProgress(chp)
@@ -360,29 +332,30 @@ loop:
 // // 	return output
 // // }
 
-// func extractCodeBlocks(output string) ([]string, string, error) {
-// 	// Adjusting the regex to match different newline characters and be more robust
-// 	// This pattern is more flexible in capturing the content between ```go and ```
-// 	pattern := "(?s)```go\r?\n(.*?)[\r\n]```"
-// 	re := regexp.MustCompile(pattern)
-// 	sections := strings.Split(output, "```go")
-// 	// Find all matches
-// 	matches := re.FindAllStringSubmatch(output, -1)
+func ExtractCodeBlocks(output string) ([]string, string, error) {
+	// Adjusting the regex to match different newline characters and be more robust
+	// This pattern is more flexible in capturing the content between ```go and ```
+	pattern := "(?s)```go\r?\n(.*?)[\r\n]```"
+	re := regexp.MustCompile(pattern)
+	sections := strings.Split(output, "```go")
+	// Find all matches
+	matches := re.FindAllStringSubmatch(output, -1)
 
-// 	if len(matches) == 0 {
-// 		fmt.Println("No code blocks found. Ensure the file contains correctly delimited Go code blocks.")
-// 		return nil, "", errors.New("no code blocks found")
-// 	}
+	if len(matches) == 0 {
+		fmt.Println("No code blocks found. Ensure the file contains correctly delimited Go code blocks.")
+		return nil, "", errors.New("no code blocks found")
+	}
 
-// 	// Print each code block found
-// 	blocks := make([]string, len(matches))
-// 	// var sb strings.Builder
-// 	for i, blockOfLines := range matches {
-// 		blocks[i] = blockOfLines[1]
-// 	}
-// 	fmt.Printf("\n\n::::::::Reoprt From Executor:::::::::\nTotal number of Code blocks generated: \n%d\n\n%s\n", len(blocks), sections[0])
-// 	return blocks, sections[0], nil
-// }
+	// Print each code block found
+	blocks := make([]string, len(matches))
+	// var sb strings.Builder
+	for i, blockOfLines := range matches {
+		blocks[i] = blockOfLines[1]
+	}
+	// fmt.Printf("\n\n::::::::Reoprt From Executor:::::::::\nTotal number of Code blocks generated: \n%d\n\n%s\n", len(blocks), sections[0])
+	return blocks, sections[1], nil
+}
+
 // func (pj *VisionBuilder) AutoCodeDeveloper(visionGoalAndTask, task string) CodeResponse {
 // 	pj.Output.PreCode = pj.Output.Code
 // 	// i := 1

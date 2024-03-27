@@ -16,7 +16,7 @@ func loadControlPrimitivesContext(primitiveNames []string, packagePath string) (
 
 	primitives := make([]string, 0)
 	for _, primitiveName := range primitiveNames {
-		content, err := loadText(filepath.Join(packagePath, "control_primitives_context", primitiveName+".js"))
+		content, err := loadText(filepath.Join(packagePath, "control_primitives_context", primitiveName+".go"))
 		if err != nil {
 			return nil, err
 		}
@@ -32,7 +32,7 @@ func listPrimitiveNames(packagePath string) ([]string, error) {
 		return nil, err
 	}
 	for _, fileInfo := range primitiveFiles {
-		if fileInfo.IsDir() || filepath.Ext(fileInfo.Name()) != ".js" {
+		if fileInfo.IsDir() || filepath.Ext(fileInfo.Name()) != ".go" {
 			continue
 		}
 		primitiveNames = append(primitiveNames, fileInfo.Name()[:len(fileInfo.Name())-3])
